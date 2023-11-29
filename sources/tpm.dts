@@ -1,0 +1,29 @@
+/dts-v1/;
+/plugin/;
+
+/ {
+   fragment@0 {
+        target = <&spicc1>;
+
+        __overlay__ {
+            spidev@0 {
+                status = "disabled";
+            };
+        };
+    };
+
+    fragment@1 {
+        target = <&spicc1>;
+
+        __overlay__ {
+            status = "okay";
+
+            tpm_tis_spi:tpm@0 {
+                status = "okay";
+                compatible = "infineon,slb9670", "tcg,tpm_tis_spi";
+                reg = <0>;
+                spi-max-frequency = <43000000>;
+            };
+        };
+    };
+};
