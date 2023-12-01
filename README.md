@@ -197,4 +197,122 @@ TPM
 
 ### to be continued...
 
-In the next parts we will see how to enable TPM in **u-boot** and how to use TPM module in Debian.
+In the next parts we will see how to enable TPM in **u-boot** and how to use TPM module in Debian.<br>
+
+
+## Эксперименты с подключением TPM модуля к одноплатнику Khadas VIM3.
+
+Появилась задача использовать функционал TPM модуля на данном одноплатнике.<br>
+Были закуплены следующие TPM модули:<br> 
+[TPM-SPI 90MC07D0-M0XBN0 for ASUS](https://market.yandex.ru/product--kriptograficheskii-modul-asus-tpm-spi-90mc07d0-m0xbn0/953766605), чип: **Nuvoton NPCT750A**<br>
+[TPM COPI 12pin SPI for Gigabyte](https://market.yandex.ru/product--tpm-modul-copi-12pin-spi-dlia-gigabyte/102465493023), чип: **Infineon SLB9670**<br>
+
+Оба TPM модуля имеют интерфейс SPI.<br>
+
+TPM модуль вешается на внешнюю 40-контактную GPIO-колодку VIM3.<br>
+Картинки см. вышe.
+
+Ножку Reset TPM модуля я через резистор 10 кОм подключил на ножку VCC3.3 колодки VIM3. 
+
+
+## Предварительные настройки:
+ 1. **В конфиге ядра** - [kernel-config](https://docs.khadas.com/products/sbc/vim3/development/linux/build-linux-kernel):
+```
+make kernel-config
+```
+- освободили SPI1 от spidev:
+```
+Device Drivers  ---> [*] SPI support  ---> <M> User mode SPI device driver support
+```
+- включили TPM:
+```
+Device Drivers  ---> Character devices  ---> <M> TPM Hardware Support  --->
+   <M>   TPM Interface Specification 1.2 Interface / TPM 2.0 FIFO Interface  
+   <M>   TPM Interface Specification 1.3 Interface / TPM 2.0 FIFO Interface - (SPI)
+```
+После этого пересобираем ядро:
+```
+make kernel-deb
+```
+После этого из fenix директории **build/images/debs/1.5.2/VIM3** из deb-пакета **linux-image-amlogic-mainline_1.5.2_arm64.deb** берем файлы:
+- config-6.2.0
+- System.map-6.2.0 
+- vmlinuz-6.2.0<br>
+
+и копируем в /boot/ на SD-карту, **vmlinuz-6.2.0** копируем кaк vmlinuz-6.2.0 и кaк zImage.
+
+из deb-пакета **linux-image-amlogic-mainline_1.5.2_arm64.deb** из директории **lib/modules/6.2.0/kernel/drivers/char** берем папку **tpm** и копируем в **/rootfs/lib/modules/6.2.0/kernel/drivers/char**.<br>
+
+
+
+2. **Device tree:**
+
+C device tree eсть два варианта: 2.1 - добавить запись в основную таблицу или 2.2 - сделать overlay, который добавит нужный функционал поверх основной таблицы. Второй вариант см. ниже.<br>
+
+2.1<br>
+2.1.1<br>
+взяли /boot/dtb.img с SD-карты.
+декомпилировали dtb ([здесь пояснение](https://forum.khadas.com/t/how-to-make-dts-work-without-building-the-whole-image/15370/4))<br>
+добавили в dts где-то рядом с<br>
+```
+spi@15000 {
+     compatible = "amlogic,meson-g12a-spicc";
+}
+```
+вот такую запись:
+```
+tpm_tis_spi:@0 {
+     status = "okay";
+     compatible = "infineon,slb9670", "tcg,tpm_tis_spi";
+     reg = <0>;
+     spi-max-frequency = <43000000>;
+};
+```     
+и снова собрали dtb.
+
+2.1.2<br>
+В /boot/env.txt (на SD-карте) в overlays добавили spi1 и убрали uart3 и pwm_f ([здесь пояснение](https://docs.khadas.com/products/sbc/vim3/applications/gpio/spi)).
+
+2.2<br>
+2.2.1<br>
+В ядро добавляем overlay для device tree со следующим содержимым (arch/arm64/boot/dts/amlogic/overlays/kvim3/tpm.dts):
+``` 
+/dts-v1/;
+/plugin/;
+
+/ {
+    fragment@0 {
+        target = <&spicc1>;
+
+        __overlay__ {
+            spidev@0 {
+                status = "disabled";
+            };
+        };
+    };
+
+    fragment@1 {
+        target = <&spicc1>;
+
+        __overlay__ {
+            status = "okay";
+
+            tpm_tis_spi:tpm@0 {
+                status = "okay";
+                compatible = "infineon,slb9670", "tcg,tpm_tis_spi";
+                reg = <0>;
+                spi-max-frequency = <43000000>;
+            };
+       };
+   };
+};
+``` 
+Здесь мы отключаем устройство spidev управляемое контроллером spicc1 и включаем вместо него устройство типа tpm_tis_spi
+Также не забываем добавить наш overlay в список файлов для сборки (arch/arm64/boot/dts/amlogic/overlays/kvim3/Makefile).
+
+2.2.2<br>
+Собираем модули и dtb, закидываем на устройство. Файл с overlay для tpm нужно положить в каталог /boot/dtb/amlogic/overlays/kvim3/ на SD карте.
+В файле /boot/env.txt добавляем tpm в список overlay=... tpm. После перезагрузки можно проверять.<br>
+
+2.2.3.<br>
+Также не забываем в /boot/env.txt в overlays добавить spi1 и убрать uart3 и pwm_f ([здесь пояснение](https://docs.khadas.com/products/sbc/vim3/applications/gpio/spi)).
