@@ -193,11 +193,71 @@ In
 TPM
  Generated EPS:            0 CLEAR
 ```
+<br>
+
+### TPM module and u-boot<br>
+
+Unfortunately, it turned out that the VIM3 u-boot does not contain drivers for the SPICC controller. The existing driver for SPI NOR flash does not work on top of the same controller, but is a separate, specialized controller and is not suitable for our tasks.
+Therefore, there are two ways:
+
+- porting the driver from the linux kernel
+- TPM connection via a driver implementing the SPI software interface.
+
+To quickly check the solution, option 2 was chosen, i.e. soft-spi. To connect in this mode, changes have been made to the u-boot settings:
+
+*To configuration:*<br>
+Library routines → Security support → Trusted Platform Modules (TPM) Support [ * ]<br>
+Device Drivers → SPI Support → Soft SPI driver [ * ]<br>
+               → TPM support → TMPv2.x support [ * ]<br>
+                             → Enable support for TPMv2.x SPI chips<br>
 
 
-### to be continued...
+*To device tree:*<br>
+add to dtsi (u-boot-mainline-v2021.04/arch/arm/dts/meson-khadas-vim3-u-boot.dtsi) somewhere near:
+```
+&spifc
+{
+   status = "okay";
+};
+```
+this entry:
+```
+&cbus {
+    soft-spi {
+        compatible = "spi-gpio";
+        cs-gpios = <&gpio GPIOH_6 GPIO_ACTIVE_LOW>;
+        gpio-sck = <&gpio GPIOH_7 GPIO_ACTIVE_LOW>;
+        gpio-mosi = <&gpio GPIOH_4 GPIO_ACTIVE_LOW>;
+        gpio-miso = <&gpio GPIOH_5 GPIO_ACTIVE_LOW>;
+        spi-delay-us = <1>;
 
-In the next parts we will see how to enable TPM in **u-boot** and how to use TPM module in Debian.<br>
+        cs@0 {
+        };
+
+        tpm2_spi:tmp@0 {
+            compatible = "infineon,slb9670", "tcg,tpm_tis-spi";
+            reg = <0>;
+            #address-cells = <1>;
+            #size-cells = <0>;
+            status = "okay";
+            spi-max-frequency = <43000000>;
+        };
+    };
+};
+```
+
+Rebuild u-boot and copy to device.<br>
+In case of loading from SD card:
+
+```
+dd if=fip/u-boot.bin.sd.bin of=/dev/sdX bs=1  count=444 conv=fsync,notrunc
+dd if=fip/u-boot.bin.sd.bin of=/dev/sdX bs=512  skip=1 seek=1 conv=fsync,notrunc
+```
+
+
+### *to be continued...
+
+In the next parts we will see how to use TPM module in Debian.
 
 
 ## Эксперименты с подключением TPM модуля к одноплатнику Khadas VIM3.
