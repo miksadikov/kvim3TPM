@@ -3,6 +3,10 @@
 
 **Описание на русском см. ниже.**
 
+![Static Badge](https://img.shields.io/badge/miksadikov-kvim3TPM-kvim3TPM)
+![GitHub Repo stars](https://img.shields.io/github/stars/miksadikov/kvim3TPM)
+![GitHub issues](https://img.shields.io/github/issues/miksadikov/kvim3TPM)
+
 Experiments with connecting the TPM module to [Khadas VIM3](https://www.khadas.com/vim3).
 
 I have a task to use the TPM module on the VIM3.
